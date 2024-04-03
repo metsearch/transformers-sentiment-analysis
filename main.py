@@ -6,6 +6,7 @@ import pandas as pd
 from datasets import load_dataset
 
 from rich.progress import track
+from rich.console import Console
 
 import torch as th
 from torch.utils.data import DataLoader
@@ -104,11 +105,33 @@ def train(path2data, path2models, batch_size, num_epochs):
     logger.info('The model was saved ...!')
 
 @router_cmd.command()
-@click.option('--path2data', help='where the dataset is saved', type=str, default='data/')
 @click.option('--path2models', help='where the models are saved', type=str, default='models/')
-def inference(path2data, path2models):
+def inference(path2models):
     logger.info('Inference ...')
-    pass
+        
+    device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+    model = th.load(os.path.join(path2models, 'distilbert.pth')).to(device)
+    model.eval()
+    
+    with open(f'{path2models}/tokenizer.pkl', 'rb') as f:
+        tokenizer = pickle.load(f)
+    
+    console = Console()
+    keep_predicting = True
+    while keep_predicting:
+        review = input('Give a review: ')
+        if review == 'q':
+            keep_predicting = False
+            break
+        
+        result = tokenizer(str(review), padding='max_length', truncation=True, max_length=512, return_tensors='pt')
+        input_ids = result['input_ids']
+        attention_mask = result['attention_mask']
+        outputs = model(input_ids, attention_mask)
+        _, predicted = th.max(outputs, 1)
+        
+        appreciation = ':thumbs_up:' if predicted == 1 else ':thumbs_down:'
+        console.print(f'Appreciation: {appreciation}')
 
 if __name__ == '__main__':
     router_cmd(obj={})
